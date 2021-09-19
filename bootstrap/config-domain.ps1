@@ -16,7 +16,7 @@
 
 Function New-RandomString {
 	Param(
-		[int] $Length = 10,
+		[int] $Length = 8,
 		[char[]] $AllowedChars = $Null
 	)
 	If ($AllowedChars -eq $Null) {
@@ -29,7 +29,7 @@ Function New-RandomString {
 }
 Function New-RandomPassword() {
 	Param(
-		[int] $Length = 16,
+		[int] $Length = 8,
 		[char[]] $AllowedChars = $Null
 	)
 	Return New-RandomString -Length $Length -AllowedChars $AllowedChars | ConvertTo-SecureString -AsPlainText -Force

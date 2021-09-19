@@ -134,52 +134,6 @@ Function Get-GoogleMetadata() {
 	}
 }
 
-Function GetBearerToken {
-  Param (
-    [Parameter(Mandatory=$true)]
-    [string] $clientId,
-    [Parameter(Mandatory=$true)]
-    [string] $clientSecret
-  )
-
-  $postHeaders = @{"Content-Type"="application/json"}
-  $body = @{
-    "ClientId"=$clientId;
-    "ClientSecret"=$clientSecret
-  }
-  $trustUrl = "https://trust.citrixworkspacesapi.net/root/tokens/clients"
-
-  $response = Invoke-RestMethod -Uri $trustUrl -Method POST -Body (ConvertTo-Json $body) -Headers $postHeaders
-  $bearerToken = $response.token
-
-  return $bearerToken;
-}
-
-Function New-ResourceLocation {
-  Param (
-    [Parameter(Mandatory=$true)]
-    [string] $name,
-    [Parameter(Mandatory=$true)]
-    [string] $customerId,
-    [Parameter(Mandatory=$true)]
-    [string] $bearerToken
-  )
-
-  $requestUri = [string]::Format("https://registry.citrixworkspacesapi.net/{0}/resourcelocations", $customerId)
-  $headers = @{
-    "Content-Type" = "application/json"
-    "Accept" = "application/json"
-    "Authorization" = "CWSAuth bearer=$bearerToken"
-  }
-  $body = @{
-    "name" = $name
-  }
-
-  $response = Invoke-RestMethod -Uri $requestUri -Method POST -Body (ConvertTo-Json $body) -Headers $headers
-
-  return $response;
-}
-
 Function Get-Setting {
         Param (
         [Parameter(Mandatory=$True)][String][ValidateNotNullOrEmpty()]
@@ -245,152 +199,12 @@ $MacCat = Get-GoogleMetadata "instance/attributes/machine-catalog"
 $DelGro = Get-GoogleMetadata "instance/attributes/delivery-group"
 $HosCon = Get-GoogleMetadata "instance/attributes/hosting-connection"
 
-Write-Host "Getting Citrix Creds..."
-$CitrixCredsUrl = Get-GoogleMetadata "instance/attributes/citrix-creds"
-$CitrixCreds = gsutil -q cat $CitrixCredsUrl | ConvertFrom-Json
-Write-Host "Using client [$($CitrixCreds.SecureClientId)]..."
-$CtxClientId = $CitrixCreds.SecureClientId
-$CtxClientSecret = $CitrixCreds.SecureClientSecret
-$CtxCustomerId = $CitrixCreds.CustomerId
-
-
-Write-Host "Getting API bearer token..."
-$Token = GetBearerToken $CtxClientId $CtxClientSecret
-
-
-Write-Host "Creating Resource Location..."
-$NewResLoc = New-ResourceLocation "$ResLoc" $CtxCustomerId $Token
-Set-Setting "citrix/resource-location/id" $NewResLoc.id
-
-
-Write-Host "Signalling Citrix Resource Location setup..."
-$name = Get-GoogleMetadata "instance/name"
-$RuntimeConfig = Get-GoogleMetadata "instance/attributes/runtime-config"
-Set-RuntimeConfigVariable -ConfigPath $RuntimeConfig -Variable "setup/citrix/resloc/$name" -Text (Get-Date -Format g)
-
-
-Write-Host "Downloading installer..."
-$TempFile = New-TemporaryFile
-$TempFile.MoveTo($TempFile.FullName + ".exe")
-$url = "https://download.apps.cloud.com/CitrixPoshSdk.exe"
-(New-Object System.Net.WebClient).DownloadFile($url, $TempFile.FullName)
-
-Write-Host "Running installer..."
-Start-Process $TempFile.FullName "/q" -Wait
-
-
-Write-Host "Cleaning up..."
-Remove-Item $TempFile.FullName
-
-
-Write-Host "Adding PS snapins..."
-Add-PSSnapin Citrix*
-
-
-Write-Host "Initializing SDK..."
-Set-XDCredentials -CustomerId $CtxCustomerId -ProfileType CloudAPI -APIKey $CtxClientId -SecretKey $CtxClientSecret
-
-
-Write-Host "Waiting on Citrix Connector..."
-$RuntimeConfig = Get-GoogleMetadata "instance/attributes/runtime-config"
-Wait-RuntimeConfigWaiter -ConfigPath $RuntimeConfig -Waiter "waiter-connector"
-
 
 Write-Host "Getting zone..."
 While (-Not ($Zone = Get-ConfigZone -Name $ResLoc)) {
   Write-host "Waiting for zone..."
   Sleep 5
 }
-
-
-Write-Host "Creating catalog, desktop group, etc..."
-$NetbiosName = Get-GoogleMetadata "instance/attributes/netbios-name"
-$users = "$NetbiosName\Citrix Users"
-$MachineCatalogName = $MacCat
-$DeliveryGroupName = $DelGro
-
-
-$HostingServiceAccount = Get-GoogleMetadata "instance/attributes/hosting-connection-service-account"
-If ($HostingServiceAccount) {
-
-	New-BrokerCatalog  -AllocationType "Random" -Description "" -IsRemotePC $False -MachinesArePhysical $False -MinimumFunctionalLevel "L7_9" -Name $MachineCatalogName -PersistUserChanges "OnLocal" -ProvisioningType "Manual" -Scope @() -SessionSupport "MultiSession" -ZoneUid $Zone.Uid
-
-} Else {
-
-	New-BrokerCatalog  -AllocationType "Random" -Description "" -IsRemotePC $False -MachinesArePhysical $True -MinimumFunctionalLevel "L7_9" -Name $MachineCatalogName -PersistUserChanges "OnLocal" -ProvisioningType "Manual" -Scope @() -SessionSupport "MultiSession" -ZoneUid $Zone.Uid
-
-}
-
-
-$DG = New-BrokerDesktopGroup  -ColorDepth "TwentyFourBit" -DeliveryType "DesktopsAndApps" -DesktopKind "Shared" -InMaintenanceMode $False -IsRemotePC $False -MinimumFunctionalLevel "L7_9" -Name $DeliveryGroupName -OffPeakBufferSizePercent 10 -PeakBufferSizePercent 10 -PublishedName $DeliveryGroupName -Scope @() -SecureIcaRequired $False -SessionSupport "MultiSession" -ShutdownDesktopsAfterUse $False -TimeZone "UTC"
-
-New-BrokerAppEntitlementPolicyRule -DesktopGroupUid $DG.Uid -Enabled $True -IncludedUserFilterEnabled $False -Name $DeliveryGroupName
-
-$AdObj = New-Object System.Security.Principal.NTAccount($users)
-$strSID = $AdObj.Translate([System.Security.Principal.SecurityIdentifier])
-
-New-BrokerAccessPolicyRule -AllowedConnections "NotViaAG" -AllowedProtocols @("HDX","RDP") -AllowedUsers "Filtered" -AllowRestart $True -DesktopGroupUid $DG.Uid -Enabled $True -IncludedSmartAccessFilterEnabled $True -IncludedUserFilterEnabled $True -IncludedUsers @($strSID.Value) -Name "$DeliveryGroupName-Direct"
-
-New-BrokerAccessPolicyRule -AllowedConnections "ViaAG" -AllowedProtocols @("HDX","RDP") -AllowedUsers "Filtered" -AllowRestart $True -DesktopGroupUid $DG.Uid -Enabled $True -IncludedSmartAccessFilterEnabled $True -IncludedSmartAccessTags @() -IncludedUserFilterEnabled $True -IncludedUsers @($strSID.Value) -Name "$DeliveryGroupName-AG"
-
-
-@(
-@{
-name="Notepad"
-path="C:\Windows\System32\notepad.exe"
-}
-) | %{
-
-$path = $_['path']
-$name = $_['name']
-
-Write-Host "Registering app..."
-Write-Host "App Name: [$name]"
-Write-Host "App Path: [$path]"
-
-$ctxIcon = Get-BrokerIcon -FileName "$path" -index 0
-$brokerIcon = New-BrokerIcon -EncodedIconData $ctxIcon.EncodedIconData
-
-New-BrokerApplication -ApplicationType "HostedOnDesktop" -CommandLineArguments "" -CommandLineExecutable "$path" -CpuPriorityLevel "Normal" -DesktopGroup $DG.Uid -Enabled $True -IgnoreUserHomeZone $False -MaxPerUserInstances 0 -MaxTotalInstances 0 -Name "$name-$DelGro" -Priority 0 -PublishedName "$name" -SecureCmdLineArgumentsEnabled $True -ShortcutAddedToDesktop $False -ShortcutAddedToStartMenu $False -UserFilterEnabled $False -Visible $True -WaitForPrinterCreation $False -IconUid $brokerIcon.Uid
-
-}
-
-
-$HostingServiceAccount = Get-GoogleMetadata "instance/attributes/hosting-connection-service-account"
-If ($HostingServiceAccount) {
-
-  Write-Host "Creating hosting connection..."
-
-  $Project = Get-GoogleMetadata "project/project-id"
-
-  $TempFile = New-TemporaryFile
-  gcloud iam service-accounts keys create $TempFile.FullName --iam-account "$HostingServiceAccount"
-
-  $pk = (Get-Content -Path $TempFile.FullName | ConvertFrom-Json).private_key
-  $pw = $pk -Replace "\n",""
-  Remove-Item $TempFile.FullName -Force
-
-  While (-Not $HostingConnection) {
-
-    $HostingConnection = New-Item -ConnectionType "Custom" -CustomProperties "" -HypervisorAddress @("https://cloud.google.com/") -Path @("XDHyp:\Connections\$HosCon") -PluginId "GcpPluginFactory" -Scope @() -Password $pw -UserName $HostingServiceAccount -ZoneUid $Zone.Uid -Persist
-
-    If (-Not $HostingConnection) {
-      Write-Host "Failed to create hosting connection. Waiting to retry..."
-      Sleep 5
-
-      Write-Host "Adding PS snapins..."
-      Add-PSSnapin Citrix*
-
-      Write-Host "Initializing SDK..."
-      Set-XDCredentials -CustomerId $CtxCustomerId -ProfileType CloudAPI -APIKey $CtxClientId -SecretKey $CtxClientSecret
-
-    }
-  }
-
-  New-BrokerHypervisorConnection -HypHypervisorConnectionUid $HostingConnection.HypervisorConnectionUid
-
-}
-
 
 # remove startup script from metadata to prevent rerun on reboot
 $name = Get-GoogleMetadata "instance/name"
@@ -402,8 +216,4 @@ Write-Host "Signaling completion..."
 $name = Get-GoogleMetadata "instance/name"
 $RuntimeConfig = Get-GoogleMetadata "instance/attributes/runtime-config"
 Set-RuntimeConfigVariable -ConfigPath $RuntimeConfig -Variable bootstrap/$name/success/time -Text (Get-Date -Format g)
-
-
-# mgmt (script host) server no longer needed, shut down
-#Stop-Computer
 
