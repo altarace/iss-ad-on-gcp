@@ -16,7 +16,7 @@
 
 Function New-RandomString {
 	Param(
-		[int] $Length = 10,
+		[int] $Length = 8,
 		[char[]] $AllowedChars = $Null
 	)
 	If ($AllowedChars -eq $Null) {
@@ -29,7 +29,7 @@ Function New-RandomString {
 }
 Function New-RandomPassword() {
 	Param(
-		[int] $Length = 16,
+		[int] $Length = 8,
 		[char[]] $AllowedChars = $Null
 	)
 	Return New-RandomString -Length $Length -AllowedChars $AllowedChars | ConvertTo-SecureString -AsPlainText -Force
@@ -76,10 +76,6 @@ Function Set-Setting {
 
 $GcsPrefix = Get-GoogleMetadata "instance/attributes/gcs-prefix"
 
-# create group for citrix users and add admins to the group
-New-ADGroup -Name "Citrix Users" -GroupCategory Security -GroupScope Global -Description "Domain users with access to Citrix resources"
-Add-ADGroupMember -Identity "Citrix Users" -Members "Domain Admins" # add domain admins to citrix users group
-
 $DomainUsers = "domain-users:`n"
 $users = @()
 
@@ -89,11 +85,10 @@ Set-Setting "domain" $Domain
 Set-Setting "domains/$Domain/netbios-name" $Netbios
 
 1..10 | % {
-	$UserName = "user_$_"
+	$UserName = "iss-user_$_"
 	$Password = New-RandomPassword
 	New-ADUser $UserName -AccountPassword $Password
 	Enable-ADAccount $UserName
-	Add-ADGroupMember -Identity "Citrix Users" -Members $UserName
 	$DomainUsers += "- username: $UserName`n  password: $(Unwrap-SecureString $Password)`n"
 	Set-Setting "domains/$Domain/users/$UserName/password" $(Unwrap-SecureString $Password)
 	$users += @{username="$UserName@$Domain"; password="$(Unwrap-SecureString $Password)"}
