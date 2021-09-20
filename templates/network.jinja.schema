@@ -16,7 +16,7 @@
 
 info:
   title: network.jinja
-  description: Network resources for Citrix deployment.
+  description: Network resources for iss-ad deployment.
 
 required:
 - suffix

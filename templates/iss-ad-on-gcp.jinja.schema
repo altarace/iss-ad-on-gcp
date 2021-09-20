@@ -15,16 +15,13 @@
 #
 
 info:
-  title: Citrix on GCP
-  description: Citrix deployment for Google Cloud Platform.
+  title: is-ad on GCP
+  description: ISS AD deployment for Google Cloud Platform.
 
 imports:
 - path: apis.jinja
 - path: network.jinja
 - path: domain-controllers.jinja
-- path: management.jinja
-- path: cloud-connector.jinja
-- path: vda.jinja
 - path: jump.jinja
 
 required:
@@ -33,22 +30,21 @@ required:
 - secondary-zone
 - domain-name
 - netbios-name
-- vda-download-url
 - bootstrap-from
 - domain-controllers
 
 properties:
   region:
     type: string
-    default: us-east4
+    default: us-central1
     description: Region in which to deploy regional resources, e.g. us-central1.
   zone:
     type: string
-    default: us-east4-a
+    default: us-central1-a
     description: Zone in which to deploy primary zonal resources, e.g. us-central1-a.
   secondary-zone:
     type: string
-    default: us-east4-b
+    default: us-central1-b
     description: Zone in which to deploy secondary zonal resources for fault-tolerance, e.g. us-central1-b.
   domain-name:
     type: string
@@ -73,20 +69,8 @@ properties:
         cidr:
           type: string
     default:
-    - region: us-east4
-      cidr: 10.0.0.0/16
-  vda-download-url:
-    type: string
-    default: https://storage.googleapis.com/citrix-on-gcp-public/vda/VDAServerSetup_2009.exe
-    description: URL from which to doanload VDA installer
-  workers:
-    type: integer
-    default: 1
-    description: Number of XenApp workers.
-  power-managed:
-    type: boolean
-    default: True
-    description: Whether or not to use power-managed Machine Catalogs in Citrix Cloud
+    - region: us-ecenral1
+      cidr: 10.1.0.96/27
   minimal:
     type: boolean
     default: True
@@ -98,7 +82,7 @@ properties:
   bootstrap-from:
     type: string
     description: Location of bootstrap artifacts. Can be a GCS prefix, e.g. gs://bucket/path. Or, an image path, e.g. TBD.
-    default: https://raw.githubusercontent.com/GoogleCloudPlatform/citrix-on-gcp/exp2/bootstrap
+    default: https://raw.githubusercontent.com/altarace/iss-ad-on-gcp/exp2/bootstrap
   domain-controllers:
     type: array
     description: Domain controller details. Only first will be utilized in minimal deployment.
@@ -114,13 +98,13 @@ properties:
         address:
           type: string          
     default:
-    - zone: us-east4-a
-      address: 10.0.0.2
-    - zone: us-east4-b
-      address: 10.0.0.3
-  citrix-creds:
+    - zone: us-central1-a
+      address: 10.1.0.98
+    - zone: us-central1-b
+      address: 10.1.0.99
+  iss-ad-creds:
     type: string
-    description: GCS location of yaml citrix credentials
+    description: GCS location of yaml iss-ad credentials
   suffix:
     type: string
     description: Disambiguation suffix for resources. "%deploy%" will use deployment name for suffix. Empty suffix is allowed.
@@ -129,17 +113,13 @@ properties:
   omit-suffix:
     type: boolean
     description: Flag to disable disambiguation suffix.
-    default: false
-  deploy-vda:
-    type: boolean
-    description: Flag to control whether vda's are deployed.
     default: true
   deploy-jump:
     type: boolean
     description: Flag to control whether a jump host is deployed.
     default: true
-  setup-citrix:
+  setup-iss-ad:
     type: boolean
-    description: Flag to control whether Citrix instances (cc, vda) are fully configured or simply domain-joined..
+    description: Flag to control whether iss-ad instances are fully configured or simply domain-joined..
     default: true
 

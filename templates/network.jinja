@@ -15,33 +15,33 @@
 #
 
 resources:
-- name: citrix{{ properties['suffix'] }}
+- name: iss-ad{{ properties['suffix'] }}
   type: compute.v1.network
   properties:
     autoCreateSubnetworks: false
-    description: Citrix XenApp
+    description: iss-ad
   metadata:
     dependsOn:
     - api-compute
     - api-runtimeconfig
     - config
-{% if properties['setup-citrix'] %}
+{% if properties['setup-iss-ad'] %}
     - add-iam-policy
 {% endif %}
 {% for subnet in properties['subnets'] %}
-- name: citrix-{{ subnet['region'] }}{{ properties['suffix'] }}
+- name: iss-ad-{{ subnet['region'] }}{{ properties['suffix'] }}
   type: compute.v1.subnetwork
   properties:
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     ipCidrRange: {{ subnet['cidr'] }}
     region: {{ subnet['region'] }}
     privateIpGoogleAccess: true
 {% endfor %}
-- name: citrix-allow-external-dns{{ properties['suffix'] }}
+- name: iss-ad-allow-external-dns{{ properties['suffix'] }}
   type: compute.v1.firewall
   properties:
     description: Allow forwarding from Google DNS
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     allowed:
     - IPProtocol: tcp
       ports:
@@ -58,11 +58,11 @@ resources:
     - 192.168.0.0/16
     targetTags:
     - dns
-- name: citrix-allow-internal-rdp{{ properties['suffix'] }}
+- name: iss-ad-allow-internal-rdp{{ properties['suffix'] }}
   type: compute.v1.firewall
   properties:
     description: RDP from IAP tunnel addresses or jump host
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     allowed:
     - IPProtocol: tcp
       ports:
@@ -75,11 +75,11 @@ resources:
     - jump
     targetTags:
     - rdp
-- name: citrix-allow-external-rdp{{ properties['suffix'] }}
+- name: iss-ad-allow-external-rdp{{ properties['suffix'] }}
   type: compute.v1.firewall
   properties:
     description: External RDP remote management for management virtual machines
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     allowed:
     - IPProtocol: tcp
       ports:
@@ -90,11 +90,11 @@ resources:
     - 0.0.0.0/0
     targetTags:
     - jump
-- name: citrix-allow-internal-dc{{ properties['suffix'] }}
+- name: iss-ad-allow-internal-dc{{ properties['suffix'] }}
   type: compute.v1.firewall
   properties:
     description: Allow internal traffic between instances
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     allowed:
     - IPProtocol: icmp
     - IPProtocol: tcp
@@ -124,51 +124,11 @@ resources:
     - 192.168.0.0/16
     targetTags:
     - dc
-- name: citrix-allow-internal-cc-vda{{ properties['suffix'] }}
+- name: iss-ad-allow-internal-smb{{ properties['suffix'] }}
   type: compute.v1.firewall
   properties:
     description: Allow internal traffic between instances
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
-    allowed:
-    - IPProtocol: tcp
-      ports:
-      - '80'
-      - '443'
-      - '1494'
-      - '2598'
-      - '8008'
-    - IPProtocol: udp
-      ports:
-      - '1494'
-      - '2598'
-      - '16500-16509'
-    direction: INGRESS
-    priority: 1000
-    sourceTags:
-    - cc
-    targetTags:
-    - vda
-- name: citrix-allow-internal-vda-cc{{ properties['suffix'] }}
-  type: compute.v1.firewall
-  properties:
-    description: Allow internal traffic between instances
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
-    allowed:
-    - IPProtocol: tcp
-      ports:
-      - '80'
-    direction: INGRESS
-    priority: 1000
-    sourceTags:
-    - vda
-    - cc
-    targetTags:
-    - cc
-- name: citrix-allow-internal-smb{{ properties['suffix'] }}
-  type: compute.v1.firewall
-  properties:
-    description: Allow internal traffic between instances
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     allowed:
     - IPProtocol: tcp
       ports:
@@ -181,11 +141,11 @@ resources:
     - 192.168.0.0/16
     targetTags:
     - smb
-- name: citrix-deny-internal-log{{ properties['suffix'] }}
+- name: iss-ad-deny-internal-log{{ properties['suffix'] }}
   type: compute.v1.firewall
   properties:
     description: Low-priority deny all with logging to catch firewall issues from internal addresses
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     denied:
     - IPProtocol: all
     logConfig:
@@ -196,11 +156,11 @@ resources:
     - 10.0.0.0/8
     - 172.16.0.0/12
     - 192.168.0.0/16
-- name: citrix-deny-external-log{{ properties['suffix'] }}
+- name: iss-ad-deny-external-log{{ properties['suffix'] }}
   type: compute.v1.firewall
   properties:
     description: Low-priority deny all with logging to catch firewall issues from external addresses
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     denied:
     - IPProtocol: all
     logConfig:
@@ -209,16 +169,16 @@ resources:
     priority: 65534
     sourceRanges:
     - 0.0.0.0/0
-- name: citrix-on-gcp-router{{ properties['suffix'] }}
+- name: iss-ad-on-gcp-router{{ properties['suffix'] }}
   type: compute.v1.router
   properties:
-    network: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+    network: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     region: {{ properties['region'] }}
     nats:
-    - name: citrix-on-gcp-nat{{ properties['suffix'] }}
+    - name: iss-ad-on-gcp-nat{{ properties['suffix'] }}
       sourceSubnetworkIpRangesToNat: ALL_SUBNETWORKS_ALL_IP_RANGES
       natIpAllocateOption: AUTO_ONLY
-- name: citrix-on-gcp-zone{{ properties['suffix'] }}
+- name: iss-ad-on-gcp-zone{{ properties['suffix'] }}
   type: gcp-types/dns-v1beta2:managedZones
   properties:
     description: Forwarding zone to integrate Google DNS with Active Directory
@@ -226,7 +186,7 @@ resources:
     visibility: private
     privateVisibilityConfig:
       networks:
-      - networkUrl: $(ref.citrix{{ properties['suffix'] }}.selfLink)
+      - networkUrl: $(ref.iss-ad{{ properties['suffix'] }}.selfLink)
     forwardingConfig:
       targetNameServers:
 {% for address in properties['dc-addresses'] %}
